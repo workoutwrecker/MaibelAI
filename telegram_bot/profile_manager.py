@@ -32,7 +32,7 @@ async def update_user_profile(update: Update, context) -> None:
         user_prefs["gender"] = user_input
         context.user_data["profile_stage"] = "ask_workouts_per_week"
         await update.message.reply_text(
-            "How many workouts do you do per week?",
+            "How many workouts do you do per week on average?",
             reply_markup=ReplyKeyboardMarkup(
                 [[KeyboardButton("1-2"), KeyboardButton("3-4"), KeyboardButton("5+")]],
                 one_time_keyboard=True,
@@ -55,12 +55,12 @@ async def update_user_profile(update: Update, context) -> None:
         user_prefs["goal"] = user_input
         context.user_data["profile_stage"] = "profile_complete"
         await update.message.reply_text(
-            "Thank you! Your profile is complete. You can now ask me anything related to fitness!",
+            "Thank you🙏🏻 Your profile is complete💯. Let's Go!😄",
             reply_markup=ReplyKeyboardRemove()
         )
     else:
         await update.message.reply_text(
-            "I think something went wrong. Error PRMA(0)",
+            f"I think something went wrong. See you later👋. Error pr-0",
             reply_markup=ReplyKeyboardRemove()
         )
 

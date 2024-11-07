@@ -18,7 +18,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 # Call command handler
 async def call_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    link = "https://th.bing.com/th/id/OIP._M8xq8ZqE859erXkR0SD8QHaEo?w=289&h=180&c=7&r=0&o=5&dpr=1.3&pid=1.7"
+    link = "https://thumbs.dreamstime.com/z/indian-call-center-agent-shows-ok-gesture-showing-against-working-operators-bright-office-173649185.jpg"
     msg = f"Here's the link to get on a call with me right now!\n{link}"
     await update.message.reply_text(escaped_string(msg), parse_mode="MarkdownV2")
 
@@ -26,4 +26,4 @@ async def call_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
     if update.message:
-        await update.message.reply_text(f"An error occured, but don't worry. I'll be back...")
+        await update.message.reply_text(f"An error occured, but don't worry. I'll be back... Error ha-0")

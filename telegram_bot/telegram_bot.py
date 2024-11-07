@@ -34,19 +34,18 @@ encode_kwargs = {'normalize_embeddings': False}
 embeddings = HuggingFaceEmbeddings(model_name=MODEL_NAME, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs)
 vector_store = PineconeVectorStore(index_name=INDEX_NAME, embedding=embeddings)
 
-chat_model = HuggingFaceEndpoint(
+zephyr_llm = HuggingFaceEndpoint(
     repo_id="HuggingFaceH4/zephyr-7b-beta",
-    #  repo_id="nvidia/Llama-3.1-Nemotron-70B-Instruct-HF",
     task="text-generation",
-    max_new_tokens=512,
+    max_new_tokens=1024,
     do_sample=False,
     repetition_penalty=1.03,
     streaming=True,
 )
-huggingface_llm = ChatHuggingFace(llm=chat_model, disable_streaming=False)
-nvidia_llm = ChatNVIDIA(model="nv-mistralai/mistral-nemo-12b-instruct", api_key=NVIDIA_API_KEY)
+zephyr_hf_llm = ChatHuggingFace(llm=zephyr_llm, disable_streaming=False)
+nemo_nvidia_llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", api_key=NVIDIA_API_KEY)
 
-def retrieve_from_vector_store(query: str, top_k: int = 2):
+def retrieve_from_vector_store(query: str, top_k: int = 1):
     results = vector_store.similarity_search(query, k=top_k)
     return results
 
@@ -57,22 +56,40 @@ async def call_model(state: MessagesState):
     retrieved_context = "\n".join([res.page_content for res in retrieved_docs])
     system_prompt = (
         "You are a women's fitness coach named Mabel. You are very bubbly and talk in short bursts."
-        f"Here is some information on the user:\n {str(user_prefs)} "
+        f"User Information:\n {str(user_prefs)} "
         f"You may use the following as contextual information.\n {retrieved_context}"
-        "The most important thing for you to do is to be natural and focus on creating a humanlike connection with your client"
     )
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
 
-    response = huggingface_llm.invoke(messages)
-    if not response.content:
-        response.content = "Response unavailable"
+    async def get_nemo_response():
+        return await nemo_nvidia_llm.ainvoke(messages)
+
+    async def get_zephyr_response():
+        await asyncio.sleep(8)
+        return await zephyr_hf_llm.ainvoke(messages)
+
     try:
-        print("getting response from nvidia llm")
-        response = await asyncio.wait_for(nvidia_llm.invoke(messages), timeout=8)
+        # Create tasks for each coroutine
+        nemo_task = asyncio.create_task(get_nemo_response())
+        zephyr_task = asyncio.create_task(get_zephyr_response())
+        done, pending = await asyncio.wait([nemo_task, zephyr_task], return_when=asyncio.FIRST_COMPLETED, timeout=25)
+
+        for task in done:
+            response = task.result()
+            break
+        for task in pending:
+            task.cancel()
+
     except asyncio.TimeoutError:
-        print("Getting response from hugging face llm")
-        response = await huggingface_llm.invoke(messages)()
+        # If neither task completes within 25 seconds, return fallback response
+        print("Both tasks took too long. Returning fallback response.")
+        response.content = "Response took too long. Sorry about that. Please try again."
+
+    if not response.content:
+        response.content = "Response unavailable. Sorry😛. Error te-0"
+
     return {"messages": response}
+
 
 async def handle_message(update: Update, context) -> None:
     if "profile_stage" not in context.user_data:
@@ -84,7 +101,7 @@ async def handle_message(update: Update, context) -> None:
         prompt = update.message.text
         
         messages = {"messages": [HumanMessage(content=prompt)]}
-        ai_msg = app.invoke(messages, config={"configurable": {"thread_id": str(update.message.chat_id)}})
+        ai_msg = await app.ainvoke(messages, config={"configurable": {"thread_id": str(update.message.chat_id)}})
 
         ai_messages = ai_msg['messages']
         for index in range(len(ai_messages) - 1, -1, -1): # Extract the latest AI message
