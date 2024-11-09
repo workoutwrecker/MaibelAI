@@ -1,38 +1,27 @@
+import os
+import time
+import asyncio
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, trim_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
 from dotenv import load_dotenv
-from pinecone import Pinecone
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_pinecone import PineconeVectorStore
+
 from handlers import start_handler, call_bot_handler, error_handler
-from profile_manager import user_prefs, update_user_profile
-import os
-import time
-import asyncio
+from telegram_bot.profile_mgmt import user_prefs, update_user_profile
+from pinecone_vs import VectorStoreManager
 
 load_dotenv()
 
 # Constants and configuration
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-INDEX_NAME = "langchain-test-index"
-MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
 
 # Setup workflow for LangChain
 workflow = StateGraph(state_schema=MessagesState)
-
-# Initialize Pinecone and Vector Store
-Pinecone(api_key=PINECONE_API_KEY)
-model_kwargs = {'device': 'cpu'}
-encode_kwargs = {'normalize_embeddings': False}
-embeddings = HuggingFaceEmbeddings(model_name=MODEL_NAME, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs)
-vector_store = PineconeVectorStore(index_name=INDEX_NAME, embedding=embeddings)
 
 zephyr_llm = HuggingFaceEndpoint(
     repo_id="HuggingFaceH4/zephyr-7b-beta",
@@ -44,22 +33,33 @@ zephyr_llm = HuggingFaceEndpoint(
 )
 zephyr_hf_llm = ChatHuggingFace(llm=zephyr_llm, disable_streaming=False)
 nemo_nvidia_llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", api_key=NVIDIA_API_KEY)
+pinecone_vs = VectorStoreManager()
 
-def retrieve_from_vector_store(query: str, top_k: int = 1):
-    results = vector_store.similarity_search(query, k=top_k)
-    return results
+# def updateState(config):
+# Channels without reducers are not overrided but appended to.
+#     current_state = app.get_state(config).values
+#     print("\n-----------------\n")
+#     print("Current State: ", current_state)
+#     trimmed_state = trim_messages(current_state['messages'], strategy="last", token_counter=len, 
+#                                   max_tokens=2, start_on="human", end_on=("ai"), include_system=False)
+#     print("\n-----------------\n")
+#     print("Trimmed State: ", trimmed_state)
+#     app.update_state(config, {"messages": trimmed_state})
+
 
 # Define the function that generates responses using LangChain
 async def call_model(state: MessagesState):
-    user_input = state["messages"][-1].content
-    retrieved_docs = retrieve_from_vector_store(user_input)
+    trimmed_state = trim_messages(state['messages'], strategy="last", token_counter=len, 
+                                  max_tokens=21, start_on="human", end_on=("human"), include_system=False)
+    user_input = trimmed_state[-1].content
+    retrieved_docs = pinecone_vs.retrieve_from_vector_store(user_input, 1)
     retrieved_context = "\n".join([res.page_content for res in retrieved_docs])
     system_prompt = (
         "You are a women's fitness coach named Mabel. You are very bubbly and talk in short bursts."
         f"User Information:\n {str(user_prefs)} "
         f"You may use the following as contextual information.\n {retrieved_context}"
     )
-    messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    messages = [SystemMessage(content=system_prompt)] + trimmed_state
 
     async def get_nemo_response():
         return await nemo_nvidia_llm.ainvoke(messages)
@@ -99,9 +99,10 @@ async def handle_message(update: Update, context) -> None:
         await update_user_profile(update, context)
     else:
         prompt = update.message.text
-        
         messages = {"messages": [HumanMessage(content=prompt)]}
-        ai_msg = await app.ainvoke(messages, config={"configurable": {"thread_id": str(update.message.chat_id)}})
+        config = {"configurable": {"thread_id": str(update.message.chat_id)}}
+        
+        ai_msg = await app.ainvoke(messages, config)
 
         ai_messages = ai_msg['messages']
         for index in range(len(ai_messages) - 1, -1, -1): # Extract the latest AI message

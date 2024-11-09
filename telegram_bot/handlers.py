@@ -1,8 +1,9 @@
 import logging
 from telegram import Update
 from telegram.ext import ContextTypes
+from telegram_bot.profile_mgmt import update_user_profile
+
 from utils import escaped_string
-from profile_manager import update_user_profile
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,7 +15,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     final_msg = f"Hi {user.mention_markdown_v2()}{escaped_string(msg)}"
     await update.message.reply_text(final_msg, parse_mode="MarkdownV2")
     await update_user_profile(update, context)
-
 
 # Call command handler
 async def call_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
