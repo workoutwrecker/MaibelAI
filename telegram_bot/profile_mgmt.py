@@ -3,6 +3,20 @@ from telegram.ext import CallbackContext
 
 from utils import format_dict
 
+age_options = ["18-24", "25-34", "35-44", "45+"]
+gender_options = ["Female", "Male", "Other"]
+workouts_options = ["1-2", "3-4", "5+"]
+goal_options = ["Lose weight", "Get stronger"]
+goal_options_2 = ["Build muscle", "Mix"]
+weakness_options = ["Bodily Pain", "Intensity Limit"]
+weakness_options_2 = ["Womens issues", "Go Back"]
+bodily_pain_options = ["Low back pain", "Knee pain"]
+bodily_pain_options_2 = ["Migraines", "Wrist pain"]
+intensity_options = ["Can't sweat", "Low"]
+intensity_options_2 = ["Medium"]
+pregnancy_options = ["Pregnancy", "Postpartum"]
+go_back_option = ["Go Back"]
+
 def get_inline_markup(options: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton(option, callback_data=option) for option in option_row] for option_row in options]
@@ -20,26 +34,36 @@ async def update_user_profile(update: Update, context: CallbackContext) -> None:
     callback_data = update.callback_query.data
     user_info = context.user_data.setdefault("user_info", {})
     user_limitations = context.user_data.setdefault("user_limitations", {})
-
+    print(f"callback_data: {callback_data}")
     setup_context = context.user_data["setup"]
     match setup_context:
         case "age":
+            if callback_data not in age_options:
+                return
             user_info["Age"] = callback_data
             context.user_data["setup"] = "init"
             await(setup(update, context))
         case "gender":
+            if callback_data not in gender_options:
+                return
             user_info["Gender"] = callback_data
             context.user_data["setup"] = "init"
             await(setup(update, context))
         case "workouts":
+            if callback_data not in workouts_options:
+                return
             user_info["Workouts"] = callback_data
             context.user_data["setup"] = "init"
             await(setup(update, context))
         case "goal":
+            if callback_data not in goal_options + goal_options_2:
+                return
             user_info["Goal"] = callback_data
             context.user_data["setup"] = "init"
             await(setup(update, context))
         case "limitations":
+            if callback_data not in weakness_options + weakness_options_2:
+                return
             match callback_data:
                 case "Bodily Pain": await ask_bodily_pain(update, context)
                 case "Intensity Limit": await ask_intensity_limit(update, context)
@@ -49,16 +73,19 @@ async def update_user_profile(update: Update, context: CallbackContext) -> None:
                     context.user_data["setup"] = "init"
                     await(setup(update, context))
         case "Bodily Pain" | "Intensity Limit" | "Womens Issues":
-            if callback_data == "Go Back":
+            if callback_data in go_back_option:
                 context.user_data["setup"] = "limitations"
                 await ask_limitations(update, context)
             else:
+                if callback_data not in bodily_pain_options + bodily_pain_options_2 \
+                + intensity_options + intensity_options_2 + pregnancy_options:
+                    return
                 if callback_data not in user_limitations.setdefault(setup_context, []):
                     user_limitations[setup_context].append(callback_data)
                 context.user_data["setup"] = "init"
                 await(setup(update, context))
         case "remove_limitations":
-            if callback_data == "Go Back":
+            if callback_data in go_back_option:
                 context.user_data["setup"] = "limitations"
                 await ask_limitations(update, context)
             else:
@@ -92,33 +119,33 @@ async def setup(update: Update, context) -> None:
 
 async def ask_age(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "age"
-    keyboard = get_inline_markup([["18-24", "25-34", "35-44", "45+"]])
+    keyboard = get_inline_markup([age_options])
     await update.callback_query.message.edit_text("Please select your age range:", reply_markup=keyboard)
     
 async def ask_gender(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "gender"
-    keyboard = get_inline_markup([["Female", "Male", "Other"]])
+    keyboard = get_inline_markup([gender_options])
     await update.callback_query.message.edit_text("Please select your gender:", reply_markup=keyboard)
 
 async def ask_workouts(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "workouts"
-    keyboard = get_inline_markup([["1-2", "3-4", "5+"]])
+    keyboard = get_inline_markup([workouts_options])
     await update.callback_query.message.edit_text("How many workouts do you do per week?", reply_markup=keyboard)
 
 async def ask_goal(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "goal"
-    keyboard = get_inline_markup([["Lose weight", "Get stronger"], ["Build muscle", "Mix"]])
+    keyboard = get_inline_markup([goal_options, goal_options_2])
     await update.callback_query.message.edit_text("What is your fitness goal?", reply_markup=keyboard)
 
 async def ask_limitations(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "limitations"
-    row_2 = ["Womens issues", "Go Back"]
+    
     user_limitations = context.user_data.get("user_limitations", {})
     if len(user_limitations.keys()) > 0:
-        row_2.append("Remove")
+        weakness_options.append("Remove")
     keyboard = get_inline_markup([
-        ["Bodily Pain", "Intensity Limit"],
-        row_2
+        weakness_options,
+        weakness_options_2
     ])
     await update.callback_query.message.edit_text(
         "Select or type any physical limitations you have!",
@@ -128,7 +155,7 @@ async def ask_limitations(update: Update, context: CallbackContext) -> None:
 async def ask_bodily_pain(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "Bodily Pain"
     keyboard = get_inline_markup([
-        ["Low back pain", "Knee pain"], ["Migraines", "Wrist pain"], ["Go Back"]
+        bodily_pain_options, bodily_pain_options_2, go_back_option
     ])
     await update.callback_query.message.edit_text(
         "Please select specific bodily pain:",
@@ -138,7 +165,7 @@ async def ask_bodily_pain(update: Update, context: CallbackContext) -> None:
 async def ask_intensity_limit(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "Intensity Limit"
     keyboard = get_inline_markup([
-        ["Can't sweat", "Low"], ["Medium"], ["Go Back"]
+        intensity_options, intensity_options_2, go_back_option
     ])
     await update.callback_query.message.edit_text(
         "Please select your intensity limitation:",
@@ -148,7 +175,7 @@ async def ask_intensity_limit(update: Update, context: CallbackContext) -> None:
 async def ask_womens_issues(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "Womens Issues"
     keyboard = get_inline_markup([
-        ["Pregnancy", "Postpartum"], ["Go Back"]
+        pregnancy_options, go_back_option
     ])
     await update.callback_query.message.edit_text(
         "Please select a specific women's option:",
@@ -176,7 +203,6 @@ async def ask_remove_limtitations(update: Update, context: CallbackContext) -> N
         "Please select a limitation you'd like to remove:",
         reply_markup=keyboard
     )
-
 async def finish_setup(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     user_info = context.user_data.get("user_info", {})
@@ -188,3 +214,4 @@ async def finish_setup(update: Update, context: CallbackContext) -> None:
         f"\n-------- {user.first_name}'s Limitations --------\n"
         f"{format_dict(user_limitations)}"
     )
+

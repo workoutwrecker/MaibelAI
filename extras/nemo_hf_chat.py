@@ -35,8 +35,8 @@ vector_store = PineconeVectorStore(index_name=index_name, embedding=embeddings)
 
 callbacks = [StreamingStdOutCallbackHandler()]
 llm = HuggingFaceEndpoint(
-    repo_id="HuggingFaceH4/zephyr-7b-beta",
-    #  repo_id="nvidia/Llama-3.1-Nemotron-70B-Instruct-HF",
+    # repo_id="HuggingFaceH4/zephyr-7b-beta",
+     repo_id="nvidia/Llama-3.1-Nemotron-70B-Instruct-HF",
     task="text-generation",
     max_new_tokens=512,
     do_sample=False,

@@ -43,7 +43,6 @@ async def setup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         except Exception as e:
             await update.message.reply_text(f"An error occured, but don't worry. I'll be back... Error ha-1")
             print(f"Failed to delete message: {e}")
-    
 
 async def checkin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     now = get_current_time_in_singapore()
