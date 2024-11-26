@@ -13,7 +13,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
 from dotenv import load_dotenv
 
-from handlers import start_handler, call_bot_handler, setup_handler, checkin_handler, leaderboard_handler, error_handler
+from handlers import start_handler, call_bot_handler, setup_handler, checkin_handler, leaderboard_handler, id_handler, error_handler
 from profile_mgmt import update_user_profile, check_user_info
 from utils import get_current_time_in_singapore
 from pinecone_vs import VectorStoreManager
@@ -146,6 +146,7 @@ def main() -> None:
     application.add_handler(CommandHandler('setup', setup_handler))
     application.add_handler(CommandHandler('checkin', checkin_handler))
     application.add_handler(CommandHandler('lb', leaderboard_handler))
+    application.add_handler(CommandHandler('id', id_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(update_user_profile))
     application.add_error_handler(error_handler)

@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 
 from profile_mgmt import setup
 from utils import escaped_string, get_current_time_in_singapore
-from database import update_streak, get_leaderboard, get_db_connection
+from database import update_streak, get_leaderboard, get_db_connection, db_get_user_profile
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,21 +13,46 @@ logger = logging.getLogger(__name__)
 # Start command handler
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    msg = ("! I'm a bot powered by AI. Ask me anything related to women's fitness or just chat!\n\n"
-    "/setup - Profile Setup ℹ️\n"
-    "/call - Call 📞\n"
-    "/app - Download our app!\n\n"
-    "Let's get started with your profile setup!")
-    final_msg = f"Hi {user.mention_markdown_v2()}{escaped_string(msg)}"
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT user_id FROM users WHERE user_id = %s', (user.id,))
+    result = cursor.fetchone()
+
+    if result:
+        final_msg = f"Welcome back, {user.mention_markdown_v2()}"
+        user_profile = db_get_user_profile(user.id)
+        user_info = context.user_data.get("user_info", {})
+        user_info["Age"] = user_profile[0]
+        user_info["Gender"] = user_profile[1]
+        user_info["Workouts"] = user_profile[2]
+        user_info["Goal"] = user_profile[3]
+        user_info["Limitations"] = user_profile[4]
+    else:
+        cursor.execute('''
+            INSERT INTO users (user_id, username, age, gender, workouts, goal, limitations)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''', (user.id, user.username, '', '', '', '', []))
+        conn.commit()
+        msg = (f"Hi {user.mention_markdown_v2()}")
+        msg_2 = escaped_string("! I'm a bot powered by AI. Ask me anything related to women's fitness or just chat!\n\n"
+                "/setup - Profile Setup ℹ️\n"
+                "/call - Call 📞\n"
+                "/app - Download our app!\n\n"
+                "Let's get started with your profile setup!")
+        final_msg = f"{msg}{msg_2}"
+               
+
+    conn.close()
     await update.message.reply_text(final_msg, parse_mode="MarkdownV2")
-    await setup_handler(update, context)
+    if not result:
+        await setup_handler(update, context)
     
 
 # Call command handler
 async def call_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     link = "https://thumbs.dreamstime.com/z/indian-call-center-agent-shows-ok-gesture-showing-against-working-operators-bright-office-173649185.jpg"
     msg = f"Here's the link to get on a call with me right now!\n{link}"
-    await update.message.reply_text(escaped_string(msg), parse_mode="MarkdownV2")
+    await update.message.reply_text(msg)
 
 async def setup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if "setup" not in context.user_data or context.user_data["setup"] == "finish":
@@ -92,6 +117,9 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await update.message.reply_text(leaderboard_msg)
 
+async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    await update.message.reply_text(f"Here's your User ID:\n{user.id}")
 
 # Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
