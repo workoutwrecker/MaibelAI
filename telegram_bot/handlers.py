@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from profile_mgmt import setup
-from utils import escaped_string, get_current_time_in_singapore
+from utils import escaped_string, get_current_time_in_singapore, get_limitation_category_by_id, get_limitation_label_by_id
 from database import update_streak, get_leaderboard, get_db_connection, db_get_user_profile
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -20,13 +20,26 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if result:
         final_msg = f"Welcome back, {user.mention_markdown_v2()}"
+        user_limitations = context.user_data.get("user_limitations", {})
         user_profile = db_get_user_profile(user.id)
         user_info = context.user_data.get("user_info", {})
-        user_info["Age"] = user_profile[0]
-        user_info["Gender"] = user_profile[1]
-        user_info["Workouts"] = user_profile[2]
-        user_info["Goal"] = user_profile[3]
-        user_info["Limitations"] = user_profile[4]
+        context.user_data["setup"] = "standby"
+        if user_profile[0] != '':
+            user_info["Age"] = user_profile[0]
+        if user_profile[1] != '':
+            user_info["Gender"] = user_profile[1]
+        if user_profile[2] != '':
+            user_info["Workouts"] = user_profile[2]
+        if user_profile[3] != '':
+            user_info["Goal"] = user_profile[3]
+        if not user_limitations:
+            for limitation_id in user_profile[4]:
+                category = get_limitation_category_by_id(limitation_id)
+                if category not in user_limitations:
+                    user_limitations[category] = [] #Initialise category if not exists
+                user_limitations[category].append(get_limitation_label_by_id(limitation_id))
+            context.user_data["user_limitations"] = user_limitations
+            context.user_data["user_info"] = user_info
     else:
         cursor.execute('''
             INSERT INTO users (user_id, username, age, gender, workouts, goal, limitations)
@@ -40,7 +53,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 "/app - Download our app!\n\n"
                 "Let's get started with your profile setup!")
         final_msg = f"{msg}{msg_2}"
-               
 
     conn.close()
     await update.message.reply_text(final_msg, parse_mode="MarkdownV2")
@@ -55,7 +67,8 @@ async def call_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(msg)
 
 async def setup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if "setup" not in context.user_data or context.user_data["setup"] == "finish":
+    setup_status = context.user_data["setup"]
+    if "setup" not in context.user_data or setup_status == "finish" or setup_status == "standby":
         context.user_data["setup"] = "init"; await setup(update, context)
     else:
         try:

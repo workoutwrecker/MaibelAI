@@ -65,7 +65,7 @@ async def call_model(state: MessagesState, config):
     context = config["configurable"].get("context")
     user_info = context.user_data.get("user_info", {})
     trimmed_state = trim_messages(state['messages'], strategy="last", token_counter=len, 
-                                  max_tokens=21, start_on="human", end_on=("human"), include_system=False)
+                                  max_tokens=21, start_on="human", end_on=("human"), include_system=False) # Gets context of last 21 messages
     user_input = trimmed_state[-1].content
 
     retrieved_docs = pinecone_vs.retrieve_from_vector_store(user_input, 1)

@@ -19,6 +19,9 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
+    # cursor.execute('''
+    #     DROP TABLE users
+    # ''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id BIGSERIAL PRIMARY KEY,
