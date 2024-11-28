@@ -2,7 +2,8 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CallbackContext
 
 from utils import format_dict, get_limitation_id_by_label
-from database import db_get_user_profile, db_update_user_profile, db_modify_limitation
+from database import db_update_user_profile, db_modify_limitation
+from onboarding import start_onboarding
 
 AGE_OPTIONS = ["18-24", "25-34", "35-44", "45+"]
 GENDER_OPTIONS = ["Female", "Male", "Other"]
@@ -17,8 +18,7 @@ INTENSITY_OPTIONS = ["Can't sweat", "Low"]
 INTENSITY_OPTIONS_2 = ["Medium"]
 WOMENS_ISSUES_OPTIONS = ["Pregnancy", "Postpartum"]
 GO_BACK_OPTION = ["Go Back"]
-
-
+REMOVE_OPTION = ["Remove"]
 
 
 def get_inline_markup(options: list) -> InlineKeyboardMarkup:
@@ -40,33 +40,19 @@ async def update_user_profile(update: Update, context: CallbackContext) -> None:
     user_info = context.user_data.setdefault("user_info", {})
     user_limitations = context.user_data.setdefault("user_limitations", {})
     setup_context = context.user_data["setup"]
+    async def update_user_info(setup_context: str, callback_data: str, category: str, options: list) -> None:
+        if callback_data in options:
+            user_info[category] = callback_data
+            db_update_user_profile(user_id, setup_context, callback_data)
+            context.user_data["setup"] = "init"
+            await(setup(update, context))
     match setup_context:
-        case "age":
-            if callback_data in AGE_OPTIONS:
-                user_info["Age"] = callback_data
-                db_update_user_profile(user_id, "age", callback_data)
-                context.user_data["setup"] = "init"
-                await(setup(update, context))
-        case "gender":
-            if callback_data in GENDER_OPTIONS:
-                user_info["Gender"] = callback_data
-                db_update_user_profile(user_id, "gender", callback_data)
-                context.user_data["setup"] = "init"
-                await(setup(update, context))
-        case "workouts":
-            if callback_data in WORKOUTS_OPTIONS:
-                user_info["Workouts"] = callback_data
-                db_update_user_profile(user_id, "workouts", callback_data)
-                context.user_data["setup"] = "init"
-                await(setup(update, context))
-        case "goal":
-            if callback_data in GOAL_OPTIONS + GOAL_OPTIONS_2:
-                user_info["Goal"] = callback_data
-                db_update_user_profile(user_id, "goal", callback_data)
-                context.user_data["setup"] = "init"
-                await(setup(update, context))
+        case "age": update_user_info("age", callback_data, "Age", AGE_OPTIONS)
+        case "gender": update_user_info("gender", callback_data, "Gender", GENDER_OPTIONS)
+        case "workouts": update_user_info("workouts", callback_data, "Workouts", WORKOUTS_OPTIONS)
+        case "goal": update_user_info("goal", callback_data, "Goal", GOAL_OPTIONS + GOAL_OPTIONS_2)
         case "limitations":
-            if callback_data in WEAKNESS_OPTIONS + WEAKNESS_OPTIONS_2:
+            if callback_data in WEAKNESS_OPTIONS + WEAKNESS_OPTIONS_2 + REMOVE_OPTION:
                 match callback_data:
                     case "Bodily Pain": await ask_bodily_pain(update, context)
                     case "Intensity Limit": await ask_intensity_limit(update, context)
@@ -92,9 +78,9 @@ async def update_user_profile(update: Update, context: CallbackContext) -> None:
                 context.user_data["setup"] = "limitations"
                 await ask_limitations(update, context)
             else:
-                category, value = callback_data.split(": ", 1)
-                user_limitations[category].remove(value)
-                db_modify_limitation(user_id, callback_data, 'remove')
+                category, callback_value = callback_data.split(": ", 1)
+                user_limitations[category].remove(callback_value)
+                db_modify_limitation(user_id, get_limitation_id_by_label(callback_value), 'remove')
                 if user_limitations:
                     await ask_remove_limtitations(update, context)
             
@@ -152,11 +138,8 @@ async def ask_limitations(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "limitations"
     
     user_limitations = context.user_data.get("user_limitations", {})
-    weakness_options = WEAKNESS_OPTIONS.copy()
-    if user_limitations:
-        weakness_options.append("Remove")
     keyboard = get_inline_markup([
-        weakness_options, 
+        WEAKNESS_OPTIONS + REMOVE_OPTION, 
         WEAKNESS_OPTIONS_2
     ])
     await update.callback_query.message.edit_text(
@@ -197,6 +180,7 @@ async def ask_womens_issues(update: Update, context: CallbackContext) -> None:
 async def ask_remove_limtitations(update: Update, context: CallbackContext) -> None:
     context.user_data["setup"] = "remove_limitations"
     user_limitations = context.user_data.get("user_limitations", {})
+    print(user_limitations)
     limitations_list = [
         f"{category}: {value}"
         for category, values in user_limitations.items()

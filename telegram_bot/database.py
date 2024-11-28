@@ -1,6 +1,6 @@
 import psycopg2
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 from utils import get_current_time_in_singapore
 from dotenv import load_dotenv
 
@@ -27,7 +27,7 @@ def init_db():
             user_id BIGSERIAL PRIMARY KEY,
             username TEXT NOT NULL,
             onboardDay INTEGER DEFAULT 1,
-            onboardTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            onboardTime TIMESTAMP,
             age TEXT,
             gender TEXT,
             workouts TEXT,
@@ -45,23 +45,6 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
-
-# USERS, PROFILES, ONBOARDING
-def update_username(user_id, username):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            UPDATE users
-            SET username = %s
-            WHERE user_id = %s
-        ''', (username, user_id))
-        conn.commit()
-    except Exception as e:
-        print(f"Error updating username: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
 
 def db_modify_limitation(user_id, limitation, action):
     conn = get_db_connection()
@@ -90,7 +73,7 @@ def db_get_user_profile(user_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT age, gender, workouts, goal, limitations FROM users 
+        SELECT onboardDay, onboardTime, age, gender, workouts, goal, limitations FROM users 
         WHERE user_id = %s
     ''', (user_id,))
     result = cursor.fetchone()
@@ -139,7 +122,7 @@ def get_leaderboard():
     conn.close()
     return leaderboard
 
-def reset_streaks():
+async def reset_streaks(context): # Context parameter required for job queue
     conn = get_db_connection()
     cursor = conn.cursor()
     today = get_current_time_in_singapore().date()
@@ -148,6 +131,7 @@ def reset_streaks():
     users = cursor.fetchall()
 
     for user_id, last_checkin, current_streak in users:
+        print(user_id)
         last_checkin_date = last_checkin
         if last_checkin_date < today - timedelta(days=1):
             cursor.execute('''

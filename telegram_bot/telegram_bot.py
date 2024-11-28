@@ -1,9 +1,7 @@
 import os
 import asyncio
-import schedule
-import time
 import pytz
-import threading
+from datetime import time as datetime_time
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from telegram import Update
@@ -13,11 +11,13 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
 from dotenv import load_dotenv
 
-from handlers import start_handler, call_bot_handler, setup_handler, checkin_handler, leaderboard_handler, id_handler, error_handler
+from handlers import start_handler, call_bot_handler, setup_handler, checkin_handler, leaderboard_handler, \
+id_handler, error_handler
 from profile_mgmt import update_user_profile, check_user_info
 from utils import get_current_time_in_singapore
 from pinecone_vs import VectorStoreManager
 from database import init_db, reset_streaks
+from onboarding import start_onboarding, check_onboarding_progress
 
 load_dotenv()
 
@@ -81,14 +81,15 @@ async def call_model(state: MessagesState, config):
         return await nemo_nvidia_llm.ainvoke(messages)
 
     async def get_zephyr_response():
-        await asyncio.sleep(12)
+        # await asyncio.sleep(12)
         return await zephyr_hf_llm.ainvoke(messages)
-
+    
+    await context.bot.send_chat_action(chat_id=config["configurable"]["thread_id"], action="typing")
     try:
         # Create tasks for each coroutine
         nemo_task = asyncio.create_task(get_nemo_response())
         zephyr_task = asyncio.create_task(get_zephyr_response())
-        done, pending = await asyncio.wait([nemo_task, zephyr_task], return_when=asyncio.FIRST_COMPLETED, timeout=25)
+        done, pending = await asyncio.wait([zephyr_task], return_when=asyncio.FIRST_COMPLETED, timeout=25)
 
         for task in done: response = task.result(); break
         for task in pending: task.cancel()
@@ -105,12 +106,8 @@ async def call_model(state: MessagesState, config):
 
 async def handle_message(update: Update, context) -> None:
     missing_user_info = check_user_info(context)
-    if "setup" not in context.user_data: await start_handler(update, context); return
-    elif context.user_data["setup"] == "weakness":
-        await update.message.reply_text(
-            f"Do you have any other physical limitations?"
-        ); return
-    elif missing_user_info: 
+    if "setup" not in context.user_data: await start_handler(update, context); return # New User
+    elif missing_user_info:
         await update.message.reply_text(
             f"Missing: {missing_user_info}.\nType '/setup' to fill in these details"
         ); return
@@ -118,8 +115,6 @@ async def handle_message(update: Update, context) -> None:
         prompt = update.message.text
         messages = {"messages": [HumanMessage(content=prompt)]}
         config = {"configurable": {"thread_id": str(update.message.chat_id), "context": context}}
-        
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
         ai_msg = await app.ainvoke(messages, config)
 
@@ -151,20 +146,10 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(update_user_profile))
     application.add_error_handler(error_handler)
 
-    schedule.every().day.at("00:00", "Asia/Singapore").do(reset_streaks)
-
-    def run_schedule():
-        while True:
-            next_run_time = schedule.next_run()
-            if next_run_time:
-                next_run_time_sg = next_run_time.astimezone(pytz.timezone('Asia/Singapore'))
-                time_to_sleep = (next_run_time_sg - get_current_time_in_singapore()).total_seconds()
-                if time_to_sleep > 0:
-                    time.sleep(time_to_sleep)
-            schedule.run_pending()
-
-    schedule_thread = threading.Thread(target=run_schedule)
-    schedule_thread.start()
+    application.add_handler(CommandHandler('onboarding', start_onboarding))
+    application.job_queue.run_repeating(check_onboarding_progress, interval=3600, first=0)
+    reset_time = datetime_time(hour=0, minute=0, tzinfo=pytz.timezone("Asia/Singapore"))
+    application.job_queue.run_daily(reset_streaks, time=reset_time)
 
     application.run_polling(poll_interval=1.0)
 

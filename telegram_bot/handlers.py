@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -24,16 +24,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         user_profile = db_get_user_profile(user.id)
         user_info = context.user_data.get("user_info", {})
         context.user_data["setup"] = "standby"
-        if user_profile[0] != '':
-            user_info["Age"] = user_profile[0]
-        if user_profile[1] != '':
-            user_info["Gender"] = user_profile[1]
-        if user_profile[2] != '':
-            user_info["Workouts"] = user_profile[2]
-        if user_profile[3] != '':
-            user_info["Goal"] = user_profile[3]
+        for index, key in enumerate(["onboardDay", "onboardTime","Age", "Gender", "Workouts", "Goal"]):
+            if user_profile[index] != '':
+                user_info[key] = user_profile[index]
         if not user_limitations:
-            for limitation_id in user_profile[4]:
+            for limitation_id in user_profile[6]:
                 category = get_limitation_category_by_id(limitation_id)
                 if category not in user_limitations:
                     user_limitations[category] = [] #Initialise category if not exists
@@ -67,8 +62,10 @@ async def call_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(msg)
 
 async def setup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    setup_status = context.user_data["setup"]
-    if "setup" not in context.user_data or setup_status == "finish" or setup_status == "standby":
+    user_data = context.user_data
+    if "setup" not in user_data:
+        await start_handler(update, context)
+    elif user_data["setup"] == "finish" or user_data["setup"] == "standby":
         context.user_data["setup"] = "init"; await setup(update, context)
     else:
         try:
