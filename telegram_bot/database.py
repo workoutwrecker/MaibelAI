@@ -1,144 +1,77 @@
-import psycopg2
-import os
-from datetime import timedelta
+from datetime import timedelta, datetime
 from utils import get_current_time_in_singapore
 from dotenv import load_dotenv
+
+import os
+from google.cloud import firestore
 
 load_dotenv()
 
 # INITIALISATIONS
-def get_db_connection():
-    return psycopg2.connect(
-        dbname='maibel',
-        user='postgres',
-        password=os.getenv("POSTGRE_PASS"),
-        host='localhost',
-        port='5432'
-    )
+def initialise_firestore():
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "maibelai-firebase-adminsdk-e53q1-f0545c7cfa.json"
+    return firestore.Client()
 
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    # cursor.execute('''
-    #     DROP TABLE users
-    # ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            user_id BIGSERIAL PRIMARY KEY,
-            username TEXT NOT NULL,
-            onboardDay INTEGER DEFAULT 1,
-            onboardTime TIMESTAMP,
-            age TEXT,
-            gender TEXT,
-            workouts TEXT,
-            goal TEXT,
-            limitations TEXT[]
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS streaks (
-            user_id BIGSERIAL PRIMARY KEY,
-            username TEXT,
-            last_checkin DATE,
-            current_streak INTEGER
-        )
-    ''')
-    conn.commit()
-    conn.close()
+db = initialise_firestore()
 
-def db_modify_limitation(user_id, limitation, action):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    if action == "append":
-        cursor.execute('''
-            UPDATE users
-            SET limitations = array_append(COALESCE(limitations, '{}'), %s)
-            WHERE user_id = %s
-        ''', (limitation, user_id))
-    elif action == "remove":
-        cursor.execute('''
-            UPDATE users
-            SET limitations = array_remove(limitations, %s)
-            WHERE user_id = %s
-        ''', (limitation, user_id))
-    else:
-        raise ValueError("Invalid action. Use 'append' or 'remove'.")
-    
-    conn.commit()
-    conn.close()
-
-
-def db_get_user_profile(user_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT onboardDay, onboardTime, age, gender, workouts, goal, limitations FROM users 
-        WHERE user_id = %s
-    ''', (user_id,))
-    result = cursor.fetchone()
-    conn.close()
-    return result
-
-def db_update_user_profile(user_id, field, value):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+# USER PROFILE
+def db_get_user_profile(user_id:str):
     try:
-        cursor.execute(f'''
-            UPDATE users 
-            SET {field} = %s
-            WHERE user_id = %s
-        ''', (value, user_id))
-        conn.commit()
+        user_doc = db.collection("users").document(user_id).get()
+        if user_doc.exists: return user_doc.to_dict()
+        else: return None
     except Exception as e:
-        print(f"Error updating user profile: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
+        print(f"Error retrieving user: {e}")
+        return None
+    
+def db_set_user_profile(user_info: dict):
+    try:
+        user_id_str = str(user_info.pop("userid", None))
+        user_ref = db.collection("users").document(user_id_str)
+        user_ref.set(user_info, merge=True)
+    except Exception as e:
+        print(f"Error setting user profile: {e}")
+
+
 
 # STREAKS, POINTS, LEADERBOARDS
-def update_streak(user_id, username, last_checkin, current_streak):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO streaks (user_id, username, last_checkin, current_streak)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (user_id) DO UPDATE SET
-        last_checkin = EXCLUDED.last_checkin,
-        current_streak = EXCLUDED.current_streak
-    ''', (user_id, username, last_checkin, current_streak))
-    conn.commit()
-    conn.close()
-
 def get_leaderboard():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT username, current_streak FROM streaks
-        ORDER BY current_streak DESC
-        LIMIT 10
-    ''')
-    leaderboard = cursor.fetchall()
-    conn.close()
-    return leaderboard
+    """Scheduled server side, output as list of dicts, globally accessible"""
+    try:
+        users_ref = db.collection("users")
+        # Query users by current_streak in descending order
+        query = users_ref.order_by("current_streak", direction=firestore.Query.DESCENDING).limit(10)
+        docs = query.stream()
 
-async def reset_streaks(context): # Context parameter required for job queue
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    today = get_current_time_in_singapore().date()
+        leaderboard = []
+        for doc in docs:
+            user_data = doc.to_dict()
+            leaderboard.append({
+                "username": user_data.get("username"),
+                "current_streak": user_data.get("current_streak")
+            })
+        return leaderboard
+    except Exception as e:
+        print(f"Error retrieving leaderboard: {e}")
+        return []
 
-    cursor.execute('SELECT user_id, last_checkin, current_streak FROM streaks')
-    users = cursor.fetchall()
+async def reset_streaks(context):
+    """Reset streaks locally for users if difference between last checkin and today > 1 day"""
+    try:
+        user_id = context.user_data.get("userid", None)
+        if user_id is None: print("User ID not found in context."); return
+        
+        user_profile = db_get_user_profile(user_id)
+        if not user_profile: print(f"No profile found for user {user_id}."); return
 
-    for user_id, last_checkin, current_streak in users:
-        print(user_id)
-        last_checkin_date = last_checkin
+        last_checkin = user_profile.get("last_checkin")
+        if not last_checkin: print("No last check-in found."); return
+        
+        today = get_current_time_in_singapore().date()
+        last_checkin_date = last_checkin.date()
         if last_checkin_date < today - timedelta(days=1):
-            cursor.execute('''
-                UPDATE streaks
-                SET current_streak = 0
-                WHERE user_id = %s
-            ''', (user_id,))
-    
-    conn.commit()
-    conn.close()
+            context.user_data["current_streak"] = 0
+            context.user_data["last_checkin"] = today
+        
+    except Exception as e:
+        print(f"Error resetting streaks: {e}")
