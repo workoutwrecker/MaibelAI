@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CallbackContext
 
-from utils import format_dict, get_limitation_id_by_label
+from utils import format_dict, get_limitation_id_by_label, get_limitation_label_by_id
 
 AGE_OPTIONS = ["18-24", "25-34", "35-44", "45+"]
 GENDER_OPTIONS = ["Female", "Male", "Other"]
@@ -177,7 +177,7 @@ async def ask_remove_limtitations(update: Update, context: CallbackContext) -> N
     user_limitations = context.user_data.get("user_limitations", {})
     print(user_limitations)
     limitations_list = [
-        f"{category}: {value}"
+        f"{category}: {get_limitation_label_by_id(value)}"
         for category, values in user_limitations.items()
         for value in values
     ]

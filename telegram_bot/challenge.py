@@ -20,6 +20,7 @@ async def check_challenge_progress(context: CallbackContext) -> None:
     After 24h of challenge start, we give them the option to restart the challenge"""
 
     user_data = context.user_data
+    print("User data: ", user_data)
     challenge_time = user_data.get("challengeTime", [])
     challenge_day = user_data.get("challengeDay", [])
     if not challenge_time: return

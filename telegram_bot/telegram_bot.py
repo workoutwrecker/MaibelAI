@@ -12,7 +12,7 @@ from langgraph.graph import START, MessagesState, StateGraph
 from dotenv import load_dotenv
 
 from handlers import start_handler, call_bot_handler, setup_handler, checkin_handler, leaderboard_handler, \
-id_handler, error_handler, leaderboard
+id_handler, save_handler, error_handler, leaderboard
 from profile_mgmt import update_user_profile, check_user_info
 from pinecone_vs import VectorStoreManager
 from database import reset_streaks, db_set_user_profile, get_leaderboard
@@ -140,17 +140,22 @@ def main() -> None:
     application.add_handler(CommandHandler('checkin', checkin_handler))
     application.add_handler(CommandHandler('lb', leaderboard_handler))
     application.add_handler(CommandHandler('id', id_handler))
+    application.add_handler(CommandHandler('save', save_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(update_user_profile))
     application.add_error_handler(error_handler)
 
-    application.add_handler(CommandHandler('challenge', start_challenge))
-    application.job_queue.run_repeating(check_challenge_progress, interval=3600, first=0)
-    reset_time = datetime_time(hour=0, minute=0, tzinfo=pytz.timezone("Asia/Singapore"))
-    application.job_queue.run_daily(reset_streaks, time=reset_time)
+    # application.add_handler(CommandHandler('challenge', start_challenge))
+    # application.job_queue.run_repeating(check_challenge_progress, interval=3600, first=0)
+    # reset_time = datetime_time(hour=0, minute=0, tzinfo=pytz.timezone("Asia/Singapore"))
+    # application.job_queue.run_daily(reset_streaks, time=rzeset_time)
+    # sync_time = datetime_time(hour=0, minute=0, second=10, tzinfo=pytz.timezone("Asia/Singapore"))
+    # application.job_queue.run_daily(db_set_user_profile, time=sync_time)
 
     #TODO: Schedule leaderboard per minute
     #TODO: Job queue data sync 1 hour after resetting streaks
+
+
 
     application.run_polling(poll_interval=1.0)
 

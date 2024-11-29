@@ -1,5 +1,6 @@
 **/__pycache__/
-.idea
+**/.idea/
 venv
 .env
+.env.local
 maibelai-firebase-adminsdk-e53q1-f0545c7cfa.json

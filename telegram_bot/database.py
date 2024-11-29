@@ -1,6 +1,7 @@
 from datetime import timedelta, datetime
 from utils import get_current_time_in_singapore
 from dotenv import load_dotenv
+from telegram.ext import ContextTypes
 
 import os
 from google.cloud import firestore
@@ -24,11 +25,14 @@ def db_get_user_profile(user_id:str):
         print(f"Error retrieving user: {e}")
         return None
     
-def db_set_user_profile(user_info: dict):
+async def db_set_user_profile(context: ContextTypes.DEFAULT_TYPE):
+    userid = str(context.job.user_id)
+    user_data = context.user_data
+    user_info = user_data.get("user_info", {})
     try:
-        user_id_str = str(user_info.pop("userid", None))
-        user_ref = db.collection("users").document(user_id_str)
+        user_ref = db.collection("users").document(userid)
         user_ref.set(user_info, merge=True)
+        print(f"User profile for {userid} updated successfully in Firestore.")
     except Exception as e:
         print(f"Error setting user profile: {e}")
 
