@@ -5,13 +5,13 @@ from telegram.ext import CallbackContext
 from utils import get_current_time_in_singapore
 
 async def start_challenge(update: Update, context: CallbackContext) -> None:
-    context.user_data["challengeDay"] = 1
-    context.user_data["challengeTime"] = get_current_time_in_singapore
+    context.user_data["Challenge Day"] = 1
+    context.user_data["Challenge Time"] = get_current_time_in_singapore
     await send_challenge_message(update, context)
 
 async def send_challenge_message(update: Update, context: CallbackContext) -> None:
     """Send Challenge + Scenery Photo"""
-    day = context.user_data.get("challengeDay", [])
+    day = context.user_data.get("Challenge Day", [])
     await update.message.reply_text(f"Welcome to Day {day} of your challenge!")
 
 async def check_challenge_progress(context: CallbackContext) -> None:
@@ -21,8 +21,8 @@ async def check_challenge_progress(context: CallbackContext) -> None:
 
     user_data = context.user_data
     print("User data: ", user_data)
-    challenge_time = user_data.get("challengeTime", [])
-    challenge_day = user_data.get("challengeDay", [])
+    challenge_time = user_data.get("Challenge Time", [])
+    challenge_day = user_data.get("Challenge Day", [])
     if not challenge_time: return
     
     is_completed = user_data.get("challengeStatus", False)
@@ -44,5 +44,5 @@ async def check_challenge_progress(context: CallbackContext) -> None:
 
 async def finish_challenge(context: CallbackContext) -> None:
     user_data = context.user_data
-    user_data["challengeDay"] = 99
+    user_data["Challenge Day"] = 99
     await context.bot.send_message(chat_id=context.job.context, text="Challenge complete!")

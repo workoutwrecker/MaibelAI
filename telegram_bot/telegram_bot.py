@@ -13,7 +13,8 @@ from dotenv import load_dotenv
 
 from handlers import start_handler, call_bot_handler, setup_handler, checkin_handler, leaderboard_handler, \
 id_handler, save_handler, profile_handler, error_handler, leaderboard
-from profile_mgmt import update_user_profile, check_user_info
+from profile.all_mgmt import update_user_profile
+from profile.mgmt_utils import check_user_info
 from pinecone_vs import VectorStoreManager
 from challenge import start_challenge, check_challenge_progress
 
@@ -104,7 +105,7 @@ async def call_model(state: MessagesState, config):
 
 async def handle_message(update: Update, context) -> None:
     missing_user_info = check_user_info(context)
-    if "setup" not in context.user_data: await start_handler(update, context); return # New User
+    if "callbackquery" not in context.user_data: await start_handler(update, context); return # New User
     elif missing_user_info:
         await update.message.reply_text(
             f"Missing: {missing_user_info}.\nType '/setup' to fill in these details"
@@ -149,8 +150,7 @@ def main() -> None:
     # application.job_queue.run_repeating(check_challenge_progress, interval=3600, first=0)
 
 
-    #TODO: Schedule leaderboard per minute
-    #TODO: Job queue data sync 1 hour after resetting streaks
+    #TODO: Schedule leaderboard per minute using application.job_queue
 
 
 

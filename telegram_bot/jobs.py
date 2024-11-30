@@ -9,7 +9,6 @@ async def sync_data_job(context:CallbackContext, userid:str):
     existing_jobs = context.job_queue.get_jobs_by_name(job_name)
     for job in existing_jobs:
         if job.user_id == userid:
-            print("Removing job: ", job)
             job.schedule_removal()
     context.job_queue.run_daily(db_set_user_profile, time=sync_time, name=job_name, user_id=userid)
     existing_jobs = context.job_queue.get_jobs_by_name(job_name)

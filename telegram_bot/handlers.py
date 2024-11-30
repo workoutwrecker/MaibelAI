@@ -3,7 +3,7 @@ from datetime import timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from profile_mgmt import setup
+from profile.all_mgmt import setup
 from utils import escaped_string, get_current_time_in_singapore, get_limitation_category_by_id, get_limitation_label_by_id, format_dict
 from database import db_get_user_profile, db_set_user_profile
 from jobs import sync_data_job
@@ -15,7 +15,7 @@ leaderboard = []
 
 # Start command handler
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data["setup"] = "standby"
+    context.user_data["callbackquery"] = "standby"
     user = update.effective_user
     user_profile = db_get_user_profile(str(user.id))
     user_info = context.user_data.setdefault("user_info", {})
@@ -66,9 +66,10 @@ async def call_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(msg)
 
 async def setup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    setup_data = context.user_data.get("setup", "standby")
+    """Handler with all profile options"""
+    setup_data = context.user_data.get("callbackquery", "standby")
     if setup_data == "finish" or setup_data == "standby":
-        context.user_data["setup"] = "init"; await setup(update, context)
+        context.user_data["callbackquery"] = "onboarding"; await setup(update, context)
     else:
         try:
             # Delete prev setup message
@@ -76,7 +77,7 @@ async def setup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 chat_id=update.message.chat_id,
                 message_id=context.user_data["setup_msg_id"]
             )
-            context.user_data["setup"] = "init"; await setup(update, context)
+            context.user_data["callbackquery"] = "onboarding"; await setup(update, context)
         except Exception as e:
             await update.message.reply_text(f"An error occured, but don't worry. I'll be back... Error ha-1")
             print(f"Failed to delete message: {e}")
