@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from profile_mgmt import setup
-from utils import escaped_string, get_current_time_in_singapore, get_limitation_category_by_id, get_limitation_label_by_id
+from utils import escaped_string, get_current_time_in_singapore, get_limitation_category_by_id, get_limitation_label_by_id, format_dict
 from database import db_get_user_profile, db_set_user_profile
 from jobs import sync_data_job
 
@@ -18,18 +18,19 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     context.user_data["setup"] = "standby"
     user = update.effective_user
     user_profile = db_get_user_profile(str(user.id))
-    user_info = context.user_data.get("user_info", {})
+    user_info = context.user_data.setdefault("user_info", {})
 
     if user_profile: #Existing User
         final_msg = f"Welcome back, {user.mention_markdown_v2()}"
         
-        user_limitations = context.user_data.get("user_limitations", {})
+        user_limitations = context.user_data.setdefault("user_limitations", {})
 
-        for key in ["challengeDay", "challengeTime", "Age", "Gender", "Workouts", "Goal", "Streak", "lastCheckin"]:
+        #TODO: Ask user if they want to load from database at {time}
+        for key in ["challengeDay", "challengeTime", "Age", "Gender", "Workouts", "Goal", "Streak", "Last Check-in", "Max Streak"]:
             if user_profile.get(key, ''):
                 user_info[key] = user_profile[key]
 
-        user_info["username"] = user.username
+        user_info["Username"] = user.username
 
         if not user_limitations:
             for limitation_id in user_profile.get("Limitations", []):
@@ -38,7 +39,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                     user_limitations[category] = []
                 user_limitations[category].append(get_limitation_label_by_id(limitation_id))
 
-            user_info["user_limitations"] = user_limitations
     else:
         msg = f"Hi {user.mention_markdown_v2()}"
         msg_2 = escaped_string(
@@ -49,7 +49,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             "Let's get started with your profile setup!"
         )
         final_msg = f"{msg}{msg_2}"
-        user_info["username"] = user.username
+        user_info["Username"] = user.username
         user_info["Streak"] = 0
 
     await sync_data_job(context, user.id)
@@ -86,29 +86,34 @@ async def checkin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     today = now.date()
     user = update.effective_user
     username = user.username or f"User {user.id}"
-    user_data = context.user_data.get("user_info", {})
+    user_data = context.user_data.setdefault("user_info", {})
 
-    if user_data: last_checkin, current_streak = user_data.get("last_checkin", None), user_data.get("current_streak", 0)
+    if user_data: last_checkin, current_streak = user_data.get("Last Check-in", None), user_data.get("Streak", 0)
     else: last_checkin, current_streak = None, 0
 
     if not last_checkin:
         current_streak = 1
+        user_data["Streak"] = current_streak
+        user_data["Max Streak"] = current_streak
+        user_data["Last Check-in"] = today.strftime("%Y-%m-%d")
         await update.message.reply_text("Welcome to your streak journey! Current Streak: 1 day! 🚀")
     elif last_checkin == today:
         await update.message.reply_text("You've already checked in today! Keep it going tomorrow. 🌟")
     elif last_checkin == today - timedelta(days=1):
         current_streak += 1
-        if user_data.get("maxStreak", 0) < current_streak:
-            user_data["maxStreak"] = current_streak
+        user_data["Streak"] = current_streak
+        if user_data.get("Max Streak", 0) < current_streak:
+            user_data["Max Streak"] = current_streak
         await update.message.reply_text(f"Great job! Your streak is now {current_streak} days! 🔥")
     else:
         current_streak = 1
         await update.message.reply_text("Welcome back! Your streak is reset to 1."
-                                        f"\nPrevious streak: {user_data.get('maxStreak', 0)}🌈")
-        user_data["last_checkin"] = today.strftime("%Y-%m-%d")
-        await db_set_user_profile(context)
+                                        f"\nPrevious streak: {user_data.get('Max Streak', 0)}🌈")
+        user_data["Streak"] = current_streak
+        user_data["Last Check-in"] = today.strftime("%Y-%m-%d")
+        await db_set_user_profile(context, str(user.id))
 
-    logger.info(f"User {username} streak data: {{'last_checkin': {today}, 'current_streak': {current_streak}}}")
+    logger.info(f"User {username} streak data: {{'Last Check-in': {today}, 'current streak': {current_streak}}}")
 
 
 async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -129,6 +134,18 @@ async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def save_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Use latest context data for data sync"""
     await sync_data_job(context, update.effective_user.id)
+
+async def profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    user_info = context.user_data.get("user_info", {})
+    user_limitations = context.user_data.get("user_limitations", {})
+    await update.message.reply_text(
+        f"-------- {user.first_name}'s Profile --------\n"
+        f"{format_dict(user_info)}\n"
+        f"\n-------- {user.first_name}'s Limitations --------\n"
+        f"{format_dict(user_limitations)}"
+    )
+
 
 # Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -10,6 +10,7 @@ def escaped_string(text: str) -> str:
     return text
 
 def format_dict(d: dict) -> str:
+    #TODO: Order by key to make profile less messy
     return "\n".join(
         f"{key}: {', '.join(values) if isinstance(values, list) else values}" 
         for key, values in d.items()
