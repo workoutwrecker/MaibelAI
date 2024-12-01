@@ -6,6 +6,7 @@ from utils import format_dict
 
 async def setup_profile(update: Update, context: CallbackContext) -> None:
     """Display the main profile setup menu"""
+    context.user_data["callbackquery"] = "Profile"
     msg = "Please set up your profile by selecting an option:"
     user_info = context.user_data.get("profile_info", {})
     options = [
@@ -20,6 +21,11 @@ async def setup_profile(update: Update, context: CallbackContext) -> None:
         context.user_data["setup_msg_id"] = setup_msg.message_id
     elif update.callback_query:
         await update.callback_query.message.edit_text(msg, reply_markup=keyboard)
+
+async def profile_option_caller(update: Update, context: CallbackContext, function_name:str) -> None:
+    function = globals().get(function_name)
+    if function:
+        await function(update, context)
 
 async def ask_name(update: Update, context: CallbackContext) -> None:
     context.user_data["callbackquery"] = "name"

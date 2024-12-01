@@ -12,3 +12,7 @@ def check_user_info(context: CallbackContext) -> list:
     missing_fields = [field for field in required_fields if field not in user_info]
     
     return missing_fields
+
+def normalise_option(option: str) -> str:
+    """Normalise an option string to a base form by removing ✅ or ❔."""
+    return option.replace(" ✅", "").replace("❔", "").strip()
