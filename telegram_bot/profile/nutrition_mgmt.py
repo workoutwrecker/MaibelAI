@@ -15,7 +15,7 @@ async def setup_nutrition(update: Update, context: CallbackContext) -> None:
     """Display the main nutrition setup menu"""
     context.user_data["callbackquery"] = "Nutrition"
     msg = "Please set up your nutrition profile by selecting an option:"
-    user_info = context.user_data.get("nutrition_info", {})
+    user_info = context.user_data.get("user_info", {})
     options = [
         ("Meals ✅" if "Meals" in user_info else "Meals❔"),
         ("First/Last Meal ✅" if "First/Last Meal" in user_info else "First/Last Meal❔"),
@@ -62,7 +62,7 @@ async def ask_water_intake(update: Update, context: CallbackContext) -> None:
     await update.callback_query.message.edit_text("How much water do you drink daily?", reply_markup=keyboard)
 
 async def finish_nutrition(update: Update, context: CallbackContext) -> None:
-    user_info = context.user_data.get("nutrition_info", {})
+    user_info = context.user_data.get("user_info", {})
     context.user_data["callbackquery"] = "nutrition_finish"
     msg = f"-------- Nutrition Profile --------\n"\
         f"{format_dict(user_info)}"

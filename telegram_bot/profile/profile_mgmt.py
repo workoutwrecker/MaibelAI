@@ -31,7 +31,7 @@ async def setup_profile(update: Update, context: CallbackContext) -> None:
     """Display the main profile setup menu"""
     context.user_data["callbackquery"] = "Profile"
     msg = "Please set up your profile by selecting an option:"
-    user_info = context.user_data.get("profile_info", {})
+    user_info = context.user_data.get("user_info", {})
     options = [
         ("Age ✅" if "Age" in user_info else "Age❔"),
         ("Height ✅" if "Height" in user_info else "Height❔"),
@@ -78,7 +78,7 @@ async def ask_weight(update: Update, context: CallbackContext, weight_option_ind
     await update.callback_query.message.edit_text("How much do you weigh?", reply_markup=keyboard)
 
 async def finish_profile(update: Update, context: CallbackContext) -> None:
-    user_info = context.user_data.get("profile_info", {})
+    user_info = context.user_data.get("user_info", {})
     context.user_data["callbackquery"] = "profile_finish"
     await update.callback_query.message.edit_text(
         f"-------- Profile --------\n"

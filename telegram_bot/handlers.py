@@ -3,7 +3,7 @@ from datetime import timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from profile.all_mgmt import setup
+from profile.main_mgmt import onboard_setup
 from utils import escaped_string, get_current_time_in_singapore, get_limitation_category_by_id, get_limitation_label_by_id, format_dict
 from database import db_get_user_profile, db_set_user_profile
 from jobs import sync_data_job
@@ -55,9 +55,10 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await sync_data_job(context, user.id)
     await update.message.reply_text(final_msg, parse_mode="MarkdownV2")
 
-    # Trigger profile setup for new users
-    if not user_profile:
-        await setup_handler(update, context)
+    # Trigger profile setup for new users if they haven't started a challenge yet (Onboarding incomplete)
+    if user_profile.get("Challenge Day", {}): return
+    if context.user_data.get("user_sinfo", {}).get("Challenge Day", {}): return
+    await setup_handler(update, context)
 
 # Call command handler
 async def call_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -69,7 +70,7 @@ async def setup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Handler with all profile options"""
     setup_data = context.user_data.get("callbackquery", "standby")
     if setup_data == "finish" or setup_data == "standby":
-        context.user_data["callbackquery"] = "onboarding"; await setup(update, context)
+        context.user_data["callbackquery"] = "onboarding"; await onboard_setup(update, context)
     else:
         try:
             # Delete prev setup message
@@ -77,7 +78,7 @@ async def setup_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 chat_id=update.message.chat_id,
                 message_id=context.user_data["setup_msg_id"]
             )
-            context.user_data["callbackquery"] = "onboarding"; await setup(update, context)
+            context.user_data["callbackquery"] = "onboarding"; await onboard_setup(update, context)
         except Exception as e:
             await update.message.reply_text(f"An error occured, but don't worry. I'll be back... Error ha-1")
             print(f"Failed to delete message: {e}")
@@ -98,6 +99,7 @@ async def checkin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         user_data["Max Streak"] = current_streak
         user_data["Last Check-in"] = today.strftime("%Y-%m-%d")
         await update.message.reply_text("Welcome to your streak journey! Current Streak: 1 day! 🚀")
+        await db_set_user_profile(str(user.id), user_data)
     elif last_checkin == today:
         await update.message.reply_text("You've already checked in today! Keep it going tomorrow. 🌟")
     elif last_checkin == today - timedelta(days=1):
@@ -106,13 +108,14 @@ async def checkin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if user_data.get("Max Streak", 0) < current_streak:
             user_data["Max Streak"] = current_streak
         await update.message.reply_text(f"Great job! Your streak is now {current_streak} days! 🔥")
+        await db_set_user_profile(str(user.id), user_data)
     else:
         current_streak = 1
         await update.message.reply_text("Welcome back! Your streak is reset to 1."
                                         f"\nPrevious streak: {user_data.get('Max Streak', 0)}🌈")
         user_data["Streak"] = current_streak
         user_data["Last Check-in"] = today.strftime("%Y-%m-%d")
-        await db_set_user_profile(context, str(user.id))
+        await db_set_user_profile(str(user.id), user_data)
 
     logger.info(f"User {username} streak data: {{'Last Check-in': {today}, 'current streak': {current_streak}}}")
 
@@ -135,6 +138,7 @@ async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def save_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Use latest context data for data sync"""
     await sync_data_job(context, update.effective_user.id)
+    await update.message.reply_text(f"Data Saved. Syncing will commence at 12AM Singapore Time")
 
 async def profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -143,7 +147,7 @@ async def profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text(
         f"-------- {user.first_name}'s Profile --------\n"
         f"{format_dict(user_info)}\n"
-        f"\n-------- {user.first_name}'s Limitations --------\n"
+        f"\n-------- {user.first_name}'s Limits --------\n"
         f"{format_dict(user_limitations)}"
     )
 

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 from handlers import start_handler, call_bot_handler, setup_handler, checkin_handler, leaderboard_handler, \
 id_handler, save_handler, profile_handler, error_handler, leaderboard
-from profile.all_mgmt import update_user_profile
+from profile.main_mgmt import update_user_profile
 from profile.mgmt_utils import check_user_info
 from pinecone_vs import VectorStoreManager
 from challenge import start_challenge, check_challenge_progress
@@ -104,15 +104,15 @@ async def call_model(state: MessagesState, config):
 
 
 async def handle_message(update: Update, context) -> None:
-    missing_user_info = check_user_info(context)
+    missing_nutrition, missing_profile = check_user_info(context)
     if update.message.animation:
         gif_file_id = update.message.animation.file_id
         await update.message.reply_text(f"Received a GIF! File ID: {gif_file_id}")
         return
     if "callbackquery" not in context.user_data: await start_handler(update, context); return # New User
-    elif missing_user_info:
+    elif missing_nutrition or missing_profile:
         await update.message.reply_text(
-            f"Missing: {missing_user_info}.\nType '/setup' to fill in these details"
+            f"Missing\nNutrition: {missing_nutrition}\nProfile: {missing_profile}.\nType '/setup' to fill in these details"
         ); return
     else:
         prompt = update.message.text
