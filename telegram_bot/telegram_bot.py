@@ -105,6 +105,10 @@ async def call_model(state: MessagesState, config):
 
 async def handle_message(update: Update, context) -> None:
     missing_user_info = check_user_info(context)
+    if update.message.animation:
+        gif_file_id = update.message.animation.file_id
+        await update.message.reply_text(f"Received a GIF! File ID: {gif_file_id}")
+        return
     if "callbackquery" not in context.user_data: await start_handler(update, context); return # New User
     elif missing_user_info:
         await update.message.reply_text(
@@ -142,7 +146,7 @@ def main() -> None:
     application.add_handler(CommandHandler('id', id_handler))
     application.add_handler(CommandHandler('save', save_handler))
     application.add_handler(CommandHandler('profile', profile_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND | filters.ANIMATION, handle_message))
     application.add_handler(CallbackQueryHandler(update_user_profile))
     application.add_error_handler(error_handler)
 

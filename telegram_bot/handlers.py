@@ -26,7 +26,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         user_limitations = context.user_data.setdefault("user_limitations", {})
 
         #TODO: Ask user if they want to load from database at {time}
-        for key in ["challengeDay", "challengeTime", "Age", "Gender", "Workouts", "Goal", "Streak", "Last Check-in", "Max Streak"]:
+        for key in ["Challenge Day", "Challenge Time", "Age", "Gender", "Workouts", "Goal", "Streak", "Last Check-in", "Max Streak"]:
             if user_profile.get(key, ''):
                 user_info[key] = user_profile[key]
 

@@ -1,14 +1,15 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CallbackContext
 
 from profile.mgmt_utils import get_inline_markup, normalise_option
 from profile.nutrition_mgmt import nutrition_option_caller
 from profile.lifestyle_mgmt import lifestyle_option_caller
 from profile.profile_mgmt import profile_option_caller
-
+from utils import format_dict
+from actions import start_challenges
 
 #All mgmt
-OPTIONS = ["Nutrition", "Lifestyle", "Profile", "Others"]
+OPTIONS = ["Nutrition", "Profile", "Finish"]
 
 #Nutrition mgmt
 NUTRITION_OPTIONS = ["Meals", "First/Last Meal", "Dietary Restrictions", "Home Cooked Meals", "Water Intake", "Finish"]
@@ -17,13 +18,6 @@ MEAL_TIMES_OPTIONS = ["8am, 8pm", "8am, 9pm", "8am, 10pm"]
 HOME_COOKED_MEALS_OPTIONS = ["Daily", "Few times Weekly", "Rarely"]
 WATER_OPTIONS = ["<1 litre", "1-2 litres", ">2 litres"]
 DIETARY_RESTRICTIONS_OPTIONS = ["Yes", "No"]
-
-#Lifestyle mgmt
-LIFESTYLE_OPTIONS = ["Sleep", "Rested", "Stress", "Movement", "Finish"]
-SLEEP_OPTIONS = ["<5h", "5-6h", "7-8h", ">8h"]
-RESTED_OPTIONS = ["Rarely", "Sometimes", "Always"]
-STRESS_OPTIONS = ["1", "2", "3", "4", "5"]
-MOVEMENT_OPTIONS = ["Calculate Now", "<10mins", "10-30mins", "30mins-1hr", ">1hr"]
 
 #Profile mgmt
 PROFILE_OPTIONS = ["Age", "Height", "Weight", "Finish"]
@@ -43,21 +37,26 @@ WEIGHT_OPTIONS_5 = ["<", "300lbs (136.1kg)", "310lbs (140.6kg)", "320lbs (145.1k
 ALL_HEIGHT_OPTIONS = [HEIGHT_OPTIONS_0, HEIGHT_OPTIONS_1, HEIGHT_OPTIONS_2, HEIGHT_OPTIONS_3, HEIGHT_OPTIONS_4, HEIGHT_OPTIONS_5]
 ALL_WEIGHT_OPTIONS = [WEIGHT_OPTIONS_0, WEIGHT_OPTIONS_1, WEIGHT_OPTIONS_2, WEIGHT_OPTIONS_3, WEIGHT_OPTIONS_4, WEIGHT_OPTIONS_5]
 
+#Lifestyle mgmt
+LIFESTYLE_OPTIONS = ["Sleep", "Rested", "Stress", "Movement", "Finish"]
+SLEEP_OPTIONS = ["<5h", "5-6h", "7-8h", ">8h"]
+RESTED_OPTIONS = ["Rarely", "Sometimes", "Always"]
+STRESS_OPTIONS = ["1", "2", "3", "4", "5"]
+MOVEMENT_OPTIONS = ["Calculate Now", "<10mins", "10-30mins", "30mins-1hr", ">1hr"]
+
 
 async def update_user_profile(update: Update, context: CallbackContext) -> None:
     """Very dynamic callback query handler"""
     cbq = context.user_data["callbackquery"]
     print("cbq: ", cbq)
     match cbq:
+        # Onboarding
         case "onboarding": await callback_data_handler(
-            update, context, OPTIONS, [nutrition_option_caller, lifestyle_option_caller, profile_option_caller], 
-            ["setup_nutrition", "setup_lifestyle", "setup_profile"])
+            update, context, OPTIONS, [nutrition_option_caller, profile_option_caller], 
+            ["setup_nutrition", "setup_profile"])
 
         case "Nutrition": await callback_data_handler(update, context, NUTRITION_OPTIONS, 
         [nutrition_option_caller], ["ask_meals", "ask_meal_times", "ask_dietary_restrictions","ask_home_cooked_meals", "ask_water_intake"])
-            
-        case "Lifestyle": await callback_data_handler(update, context, LIFESTYLE_OPTIONS, 
-        [lifestyle_option_caller], ["ask_sleep", "ask_rested", "ask_stress", "ask_movement"])
         
         case "Profile": await callback_data_handler(update, context, PROFILE_OPTIONS, 
         [profile_option_caller], ["ask_age", "ask_height", "ask_weight"])
@@ -77,6 +76,31 @@ async def update_user_profile(update: Update, context: CallbackContext) -> None:
         case "nutrition_dietary_restrictions": await callback_data_handler(
             update, context, DIETARY_RESTRICTIONS_OPTIONS, [nutrition_option_caller], ["setup_nutrition"], ["nutrition_info", "Dietary Restrictions"])
 
+        case "profile_age": await callback_data_handler(
+            update, context, AGE_OPTIONS, [profile_option_caller], ["setup_profile"], ["profile_info", "Age"])
+
+        case "profile_height_0" | "profile_height_1" | "profile_height_2" | "profile_height_3" | "profile_height_4" | "profile_height_5": 
+            index = int(cbq.split("_")[-1])
+            options=ALL_HEIGHT_OPTIONS[index]
+            await callback_data_handler_special(update, context, options, "ask_height", index, ["profile_info", "Height"])
+
+        case "profile_weight_0" | "profile_weight_1" | "profile_weight_2" | "profile_weight_3" | "profile_weight_4" | "profile_weight_5": 
+            index = int(cbq.split("_")[-1])
+            options=ALL_WEIGHT_OPTIONS[index]
+            await callback_data_handler_special(update, context, options, "ask_weight", index, ["profile_info", "Weight"])
+            
+        case "nutrition_finish" | "lifestyle_finish" | "profile_finish": await callback_data_handler(update, context, ["Finish"], [setup])
+
+        case "finish_onboard": 
+            print("finish_onboard_yes")
+            if update.callback_query.data == "finish_onboard_yes": await handle_finish_onboard_response(update, context)
+            elif update.callback_query.data == "finish_onboard_no": 
+                context.user_data["callbackquery"] = "onboarding"
+                await setup(update, context)
+
+        case "Lifestyle": await callback_data_handler(update, context, LIFESTYLE_OPTIONS, 
+        [lifestyle_option_caller], ["ask_sleep", "ask_rested", "ask_stress", "ask_movement"])
+            
         case "lifestyle_sleep": await callback_data_handler(
             update, context, SLEEP_OPTIONS, [lifestyle_option_caller], ["setup_lifestyle"], ["lifestyle_info", "Sleep"])
 
@@ -88,36 +112,6 @@ async def update_user_profile(update: Update, context: CallbackContext) -> None:
 
         case "lifestyle_movement": await callback_data_handler(
             update, context, MOVEMENT_OPTIONS, [lifestyle_option_caller], ["setup_lifestyle"], ["lifestyle_info", "Movement"])
-
-        case "profile_age": await callback_data_handler(
-            update, context, AGE_OPTIONS, [profile_option_caller], ["setup_profile"], ["profile_info", "Age"])
-
-        case "profile_height_0" | "profile_height_1" | "profile_height_2" | "profile_height_3" | "profile_height_4" | "profile_height_5": 
-            index = int(cbq.split("_")[-1])
-            options=ALL_HEIGHT_OPTIONS[index]
-            await callback_data_handler_special(
-                update,
-                context,
-                options,
-                "ask_height",
-                index,
-                ["profile_info", "Height"]
-            )
-
-        case "profile_weight_0" | "profile_weight_1" | "profile_weight_2" | "profile_weight_3" | "profile_weight_4" | "profile_weight_5": 
-            index = int(cbq.split("_")[-1])
-            options=ALL_WEIGHT_OPTIONS[index]
-            await callback_data_handler_special(
-                update,
-                context,
-                options,
-                "ask_weight ",
-                index,
-                ["profile_info", "Weight"]
-            )
-            
-        case "nutrition_finish" | "lifestyle_finish": await callback_data_handler(
-            update, context, ["Finish"], [setup])
 
         
 async def callback_data_handler_special(update, context, options, function, index, set_info=[]):
@@ -143,7 +137,11 @@ async def callback_data_handler_special(update, context, options, function, inde
 async def callback_data_handler(update, context, options, functions, params=[], set_info=[]):
     callback_data = normalise_option(update.callback_query.data)
     if callback_data not in options: return
-    if callback_data == "Finish": await setup(update, context); return
+    if callback_data == "Finish": 
+        if options != OPTIONS: await setup(update, context); return
+        elif options == OPTIONS and not context.user_data.get("Challenge Day", {}): 
+            await finish_onboard(update, context); return #First time onboarding
+        else: await handle_finish_onboard_response(update, context); return #Reseting profile information
     if set_info:
         if set_info[0] not in context.user_data: context.user_data[set_info[0]] = {}
         context.user_data[set_info[0]][set_info[1]] = callback_data #Set user data for relevant option
@@ -174,4 +172,31 @@ async def setup(update: Update, context: CallbackContext) -> None:
     elif update.callback_query:
         await update.callback_query.message.edit_text(msg, reply_markup=keyboard)
 
+async def finish_onboard(update: Update, context: CallbackContext) -> None:
+    """Ask the user if they are sure they want to proceed with onboarding completion."""
+    context.user_data["callbackquery"] = "finish_onboard"
+    msg = "Are you sure you want to finish onboarding? (You can always change your profile later)"
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Yes, proceed", callback_data='finish_onboard_yes')],
+        [InlineKeyboardButton("No, go back to setup", callback_data='finish_onboard_no')]
+    ])
+    await update.callback_query.message.edit_text(msg, reply_markup=keyboard)
 
+async def handle_finish_onboard_response(update: Update, context: CallbackContext) -> None:
+    """Handle the user's response to the finish onboarding confirmation."""
+    user = update.effective_user
+    nutrition_info = context.user_data.get("nutrition_info", {})
+    profile_info = context.user_data.get("profile_info", {})
+    user_info = {**nutrition_info, **profile_info}
+    query = update.callback_query
+    await query.answer()
+    has_user_started_challenges = context.user_data.get("user_info", {}).get("Challenge Day")
+
+    await update.callback_query.message.edit_text(
+        f"-------- {user.first_name}'s Profile --------\n"
+        f"{format_dict(user_info)}\n")
+    
+    if has_user_started_challenges: return # User already started challenges
+    if query.data != 'finish_onboard_yes': return
+    await start_challenges(update, context)
+        
