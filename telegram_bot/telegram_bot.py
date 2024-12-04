@@ -80,7 +80,7 @@ async def call_model(state: MessagesState, config):
         return await nemo_nvidia_llm.ainvoke(messages)
 
     async def get_zephyr_response():
-        # await asyncio.sleep(12)
+        await asyncio.sleep(12)
         return await zephyr_hf_llm.ainvoke(messages)
     
     await context.bot.send_chat_action(chat_id=config["configurable"]["thread_id"], action="typing")
@@ -88,7 +88,7 @@ async def call_model(state: MessagesState, config):
         # Create tasks for each coroutine
         nemo_task = asyncio.create_task(get_nemo_response())
         zephyr_task = asyncio.create_task(get_zephyr_response())
-        done, pending = await asyncio.wait([zephyr_task], return_when=asyncio.FIRST_COMPLETED, timeout=25)
+        done, pending = await asyncio.wait([nemo_task, zephyr_task], return_when=asyncio.FIRST_COMPLETED, timeout=25)
 
         for task in done: response = task.result(); break
         for task in pending: task.cancel()
