@@ -166,16 +166,14 @@ async def callback_data_handler_special(update, context, options, function, inde
         await profile_option_caller(update, context, "setup_profile")
 
 
-
 async def callback_data_handler(update, context, options, functions, params=[], set_info=[]):
     callback_data = normalise_option(update.callback_query.data)
     if callback_data not in options: return
     if callback_data == "Finish": 
         if options != OPTIONS: await onboard_setup(update, context); return
         elif options == OPTIONS and not context.user_data.get("Challenge Day", {}):
-            missing_user_info = check_user_info(context)
-            if missing_user_info:
-                missing_nutrition, missing_profile = check_user_info(context)
+            missing_nutrition, missing_profile = check_user_info(context)
+            if missing_nutrition or missing_profile: 
                 msg = f"Missing\nNutrition: {missing_nutrition}\nProfile: {missing_profile}."
                 await context.bot.send_message(chat_id=update.effective_user.id, text=msg); return
             await onboard_finish(update, context); return #First time onboarding
@@ -211,7 +209,7 @@ async def onboard_finish(update: Update, context: CallbackContext) -> None:
     """Ask the user if they are sure they want to proceed with onboarding completion."""
 
     context.user_data["callbackquery"] = "onboard_finish"
-    msg = "Are you sure you want to finish onboarding? (You can always change your profile later)"
+    msg = "Are you sure you want to finish setup? (You can always change your profile later)"
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Yes, proceed", callback_data='onboard_finish_yes')],
         [InlineKeyboardButton("No, go back to setup", callback_data='onboard_finish_no')]
@@ -224,13 +222,13 @@ async def handle_onboard_finish_response(update: Update, context: CallbackContex
     user_info = context.user_data.get("user_info", {})
     query = update.callback_query
     await query.answer()
-    has_user_started_challenges = context.user_data.get("user_info", {}).get("Challenge Day")
+    has_user_started_challenges = "Challenge Day" in user_info
 
     await update.callback_query.message.edit_text(
         f"-------- {user.first_name}'s Profile --------\n"
         f"{format_dict(user_info)}\n")
     
     if has_user_started_challenges: return # User already started challenges
-    if query.data != 'onboard_finish_yes': return
+    if query.data != 'onboard_finish_yes': return # User hasn't started challenges and definitely finished onboarding
     await start_challenges(update, context)
         

@@ -104,11 +104,11 @@ async def call_model(state: MessagesState, config):
 
 
 async def handle_message(update: Update, context) -> None:
-    missing_nutrition, missing_profile = check_user_info(context)
     if update.message.animation:
         gif_file_id = update.message.animation.file_id
         await update.message.reply_text(f"Received a GIF! File ID: {gif_file_id}")
         return
+    missing_nutrition, missing_profile = check_user_info(context)
     if "callbackquery" not in context.user_data: await start_handler(update, context); return # New User
     elif missing_nutrition or missing_profile:
         await update.message.reply_text(

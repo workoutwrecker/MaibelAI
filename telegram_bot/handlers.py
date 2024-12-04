@@ -26,9 +26,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         user_limitations = context.user_data.setdefault("user_limitations", {})
 
         #TODO: Ask user if they want to load from database at {time}
-        for key in ["Challenge Day", "Challenge Time", "Age", "Gender", "Workouts", "Goal", "Streak", "Last Check-in", "Max Streak"]:
-            if user_profile.get(key, ''):
-                user_info[key] = user_profile[key]
+        user_info = context.user_data.setdefault("user_info", {})
+        user_info.update(user_profile)
 
         user_info["Username"] = user.username
 
@@ -56,9 +55,9 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(final_msg, parse_mode="MarkdownV2")
 
     # Trigger profile setup for new users if they haven't started a challenge yet (Onboarding incomplete)
-    if user_profile.get("Challenge Day", {}): return
-    if context.user_data.get("user_sinfo", {}).get("Challenge Day", {}): return
-    await setup_handler(update, context)
+    if "Challenge Day" not in user_info:
+        await setup_handler(update, context)
+        
 
 # Call command handler
 async def call_bot_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -100,9 +99,9 @@ async def checkin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         user_data["Last Check-in"] = today.strftime("%Y-%m-%d")
         await update.message.reply_text("Welcome to your streak journey! Current Streak: 1 day! 🚀")
         await db_set_user_profile(str(user.id), user_data)
-    elif last_checkin == today:
+    elif last_checkin == str(today):
         await update.message.reply_text("You've already checked in today! Keep it going tomorrow. 🌟")
-    elif last_checkin == today - timedelta(days=1):
+    elif last_checkin == str(today - timedelta(days=1)):
         current_streak += 1
         user_data["Streak"] = current_streak
         if user_data.get("Max Streak", 0) < current_streak:
