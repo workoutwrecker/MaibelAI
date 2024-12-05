@@ -4,8 +4,8 @@ import pytz
 from datetime import time as datetime_time
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram import Update 
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, Defaults
 from langchain_core.messages import HumanMessage, SystemMessage, trim_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
@@ -23,6 +23,7 @@ load_dotenv()
 # Constants and configuration
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 # Setup workflow for LangChain
 workflow = StateGraph(state_schema=MessagesState)
@@ -137,7 +138,8 @@ memory = MemorySaver()
 app = workflow.compile(checkpointer=memory)
 
 def main() -> None:
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    defaults = Defaults(parse_mode="HTML")
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).defaults(defaults).build()
     application.add_handler(CommandHandler('start', start_handler))
     application.add_handler(CommandHandler('call', call_bot_handler))
     application.add_handler(CommandHandler('setup', setup_handler))
@@ -153,12 +155,17 @@ def main() -> None:
     # application.add_handler(CommandHandler('challenge', start_challenge))
     # application.job_queue.run_repeating(check_challenge_progress, interval=3600, first=0)
 
-
     #TODO: Schedule leaderboard per minute using application.job_queue
 
+    webhook_path = f"/{TELEGRAM_BOT_TOKEN}"
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=int(os.getenv("PORT", 8443)),
+        webhook_url=f"{WEBHOOK_URL}{webhook_path}",
+    )
 
 
-    application.run_polling(poll_interval=1.0)
+    # application.run_polling(poll_interval=1.0) # Comment out during deployment
 
 if __name__ == '__main__':
     main()
